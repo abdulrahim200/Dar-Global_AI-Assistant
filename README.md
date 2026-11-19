@@ -22,5 +22,13 @@ The chat endpoint only calls the LLM when relevant retrieved context exists. Res
 
 ## Deployment
 
-Set `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, and `FRONTEND_ORIGINS` in your container platform. Mount persistent storage for `/app/data` so ChromaDB survives restarts, run ingestion during deployment or as a separate job, and expose the frontend on port 80.
+The included `render.yaml` creates a Docker-based API, a static React site, and a persistent disk mounted at `/app/data` for ChromaDB. In Render, create a **New Blueprint Instance** from this repository and provide `OPENROUTER_API_KEY` when prompted. The Render service names determine the API and frontend URLs in the Blueprint; if you rename either service, update the matching URL values before deployment.
+
+After both services are live, open the API's Render Shell and run:
+
+```bash
+python -m app.ingest
+```
+
+This fills the persistent disk with the current permitted website data. The frontend's Render URL is the public URL to share with recruiters.
 

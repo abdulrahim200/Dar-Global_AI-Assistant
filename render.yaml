@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: dar-global-ai-assistant-api-abdulrahim200
+    runtime: docker
+    branch: main
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openrouter/free
+      - key: FRONTEND_ORIGINS
+        value: https://dar-global-ai-assistant-web-abdulrahim200.onrender.com
+    disk:
+      name: property-data
+      mountPath: /app/data
+      sizeGB: 1
+
+  - type: web
+    name: dar-global-ai-assistant-web-abdulrahim200
+    runtime: static
+    branch: main
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://dar-global-ai-assistant-api-abdulrahim200.onrender.com
