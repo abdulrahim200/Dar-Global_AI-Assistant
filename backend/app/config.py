@@ -9,7 +9,7 @@ CHROMA_DIR = DATA_DIR / "chroma"
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv(
-    "OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free"
+    "OPENROUTER_MODEL", "openrouter/free"
 )
 FRONTEND_ORIGINS = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
 
