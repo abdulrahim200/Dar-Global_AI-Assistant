@@ -16,7 +16,7 @@ from app.config import RAW_DATA_DIR
 HEADERS = {"User-Agent": "DarWasaltPropertyAssistant/1.0 (educational project)"}
 REQUEST_TIMEOUT = 20
 REQUEST_DELAY_SECONDS = 1.5
-MAX_PAGES_PER_SOURCE = 12
+MAX_PAGES_PER_SOURCE = 20
 
 
 @dataclass
@@ -32,12 +32,22 @@ class ScrapedPage:
 
 SOURCES = {
     "DarGlobal": {
-        "home": "https://www.darglobal.com/",
-        "allowed_paths": ("/", "/projects", "/project"),
+        "home": "https://darglobal.co.uk/",
+        "start_urls": ("https://darglobal.co.uk/projects",),
+        "allowed_paths": ("/",),
+        "max_depth": 1,
+        "max_pages": 20,
     },
     "Wasalt": {
         "home": "https://wasalt.sa/",
-        "allowed_paths": ("/", "/en", "/projects", "/property"),
+        "start_urls": (
+            "https://wasalt.sa/",
+            "https://wasalt.sa/فلل-للبيع-في-الرياض",
+            "https://wasalt.sa/شقق-للبيع-في-الرياض",
+        ),
+        "allowed_paths": ("/",),
+        "max_depth": 0,
+        "max_pages": 3,
     },
 }
 
@@ -78,14 +88,16 @@ def extract_page(source: str, url: str) -> tuple[ScrapedPage | None, BeautifulSo
         print(f"Skipping {url}: {error}")
         return None, None
 
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(response.content, "html.parser")
     for unwanted in soup(["script", "style", "noscript", "svg", "footer", "nav"]):
         unwanted.decompose()
     title = soup.title.get_text(" ", strip=True) if soup.title else source
     text = soup.get_text(" ", strip=True)
     if len(text) < 80:
         return None, soup
-    return ScrapedPage(source=source, source_url=url, title=title, text=text), soup
+    heading = soup.find("h1")
+    project_name = heading.get_text(" ", strip=True) if source == "DarGlobal" and heading else None
+    return ScrapedPage(source=source, source_url=url, title=title, text=text, project_name=project_name), soup
 
 
 def scrape_source(source: str) -> list[ScrapedPage]:
@@ -95,22 +107,24 @@ def scrape_source(source: str) -> list[ScrapedPage]:
         print(f"Skipping {source}: robots.txt does not permit collection.")
         return []
 
-    pending_urls = [home_url]
+    pending_urls = [(url, 0) for url in config["start_urls"]]
     visited_urls: set[str] = set()
     pages: list[ScrapedPage] = []
-    while pending_urls and len(visited_urls) < MAX_PAGES_PER_SOURCE:
-        url = pending_urls.pop(0)
+    max_pages = int(config.get("max_pages", MAX_PAGES_PER_SOURCE))
+    max_depth = int(config.get("max_depth", 0))
+    while pending_urls and len(visited_urls) < max_pages:
+        url, depth = pending_urls.pop(0)
         if url in visited_urls or not is_allowed_link(url, config):
             continue
         visited_urls.add(url)
         page, soup = extract_page(source, url)
         if page:
             pages.append(page)
-        if soup:
+        if soup and depth < max_depth:
             for link in soup.find_all("a", href=True):
                 candidate = urljoin(url, link["href"]).split("#")[0]
                 if candidate not in visited_urls and is_allowed_link(candidate, config):
-                    pending_urls.append(candidate)
+                    pending_urls.append((candidate, depth + 1))
         time.sleep(REQUEST_DELAY_SECONDS)
     return pages
 
