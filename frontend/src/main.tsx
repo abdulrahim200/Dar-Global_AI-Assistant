@@ -1,9 +1,24 @@
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { Component, FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type Source = { title: string; source: string; url: string };
 type Message = { role: "user" | "assistant"; content: string; sources?: Source[] };
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return <main className="app-shell"><section className="app-error"><h1>Something went wrong</h1><p>{this.state.error.message}</p><button onClick={() => window.location.reload()}>Reload chat</button></section></main>;
+    }
+    return this.props.children;
+  }
+}
 
 const suggestions = [
   "What projects does DarGlobal have?",
@@ -37,8 +52,14 @@ function App() {
         body: JSON.stringify({ message: question, history: messages.map(({ role, content }) => ({ role, content })) }),
       });
       if (!response.ok) throw new Error("The server could not process your question.");
-      const data = await response.json();
-      setMessages([...nextMessages, { role: "assistant", content: data.answer, sources: data.sources }]);
+      const data: unknown = await response.json();
+      const answer = typeof (data as { answer?: unknown }).answer === "string"
+        ? (data as { answer: string }).answer
+        : "The server returned an invalid chat response.";
+      const sources = Array.isArray((data as { sources?: unknown }).sources)
+        ? (data as { sources: unknown[] }).sources.filter(isValidSource)
+        : [];
+      setMessages([...nextMessages, { role: "assistant", content: answer, sources }]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Something went wrong. Please try again.");
     } finally { setLoading(false); }
@@ -59,5 +80,11 @@ function App() {
   </main>;
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
+function isValidSource(value: unknown): value is Source {
+  if (!value || typeof value !== "object") return false;
+  const source = value as Record<string, unknown>;
+  return ["title", "source", "url"].every((key) => typeof source[key] === "string");
+}
+
+createRoot(document.getElementById("root")!).render(<AppErrorBoundary><App /></AppErrorBoundary>);
 

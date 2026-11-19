@@ -5,6 +5,7 @@
 body { margin: 0; }
 button, input { font: inherit; }
 .app-shell { min-height: 100vh; padding: 2rem 1rem; display: grid; place-items: center; }
+.app-error { width: min(520px, 100%); padding: 2rem; text-align: center; background: white; border: 1px solid #e3e8ef; border-radius: 18px; }.app-error p { margin: .75rem 0 1.25rem; color: #657187; }.app-error button { border: 0; border-radius: 9px; padding: .75rem 1rem; color: white; background: #176b9e; cursor: pointer; }
 .chat-card { width: min(900px, 100%); height: min(760px, calc(100vh - 4rem)); min-height: 540px; display: flex; flex-direction: column; background: white; border: 1px solid #e3e8ef; border-radius: 18px; box-shadow: 0 12px 35px #1e293b0d; overflow: hidden; }
 header { padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; gap: 1rem; align-items: center; border-bottom: 1px solid #e8edf3; }
 h1, h2, p { margin: 0; } h1 { font-size: 1.15rem; } header p { margin-top: .25rem; font-size: .9rem; color: #657187; }
