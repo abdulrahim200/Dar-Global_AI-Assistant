@@ -34,7 +34,12 @@ function App() {
   const [error, setError] = useState("");
   const endOfMessages = useRef<HTMLDivElement>(null);
 
-  useEffect(() => endOfMessages.current?.scrollIntoView({ behavior: "smooth" }), [messages, loading]);
+  useEffect(() => {
+    const messageEnd = endOfMessages.current;
+    if (messageEnd && typeof messageEnd.scrollIntoView === "function") {
+      messageEnd.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, loading]);
 
   async function sendMessage(event?: FormEvent, suggested?: string) {
     event?.preventDefault();
