@@ -37,7 +37,7 @@ SOURCES = {
         "allowed_paths": ("/",),
         "allow_all_paths": True,
         "max_depth": 1,
-        "max_pages": 8,
+        "max_pages": 12,
     },
     "Wasalt": {
         "home": "https://wasalt.sa/",
@@ -45,11 +45,13 @@ SOURCES = {
             "https://wasalt.sa/",
             "https://wasalt.sa/%D9%81%D9%84%D9%84-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-%D9%81%D9%8A-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6",
             "https://wasalt.sa/%D8%B4%D9%82%D9%82-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-%D9%81%D9%8A-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6",
+            "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D8%B3%D8%AA%D8%A9-%D8%A3%D9%85%D9%8A%D8%A7%D9%84-%D8%A3%D8%AF%D9%88%D8%A7%D8%B1-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100583",
+            "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D9%86%D8%A8%D8%AA%D9%88%D9%86-%D8%A8%D8%AA%D8%B5%D8%A7%D9%85%D9%8A%D9%85-%D9%85%D9%86-%D9%85%D8%B9%D9%88%D8%B6-%D9%81%D9%84%D9%84-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100246",
         ),
         "allowed_paths": ("/",),
         "allow_all_paths": True,
         "max_depth": 0,
-        "max_pages": 3,
+        "max_pages": 5,
     },
 }
 
@@ -106,8 +108,17 @@ def extract_page(source: str, url: str) -> tuple[ScrapedPage | None, BeautifulSo
     if len(text) < 80:
         return None, soup
     heading = soup.find("h1")
-    project_name = heading.get_text(" ", strip=True) if source == "DarGlobal" and heading else None
-    return ScrapedPage(source=source, source_url=url, title=title, text=text, project_name=project_name), soup
+    is_project = source == "DarGlobal" or "/project/" in urlparse(url).path
+    project_name = heading.get_text(" ", strip=True) if is_project and heading else None
+    document_type = "project" if is_project else "website_page"
+    return ScrapedPage(
+        source=source,
+        source_url=url,
+        title=title,
+        text=text,
+        project_name=project_name,
+        document_type=document_type,
+    ), soup
 
 
 def render_javascript_page(url: str) -> str | None:
