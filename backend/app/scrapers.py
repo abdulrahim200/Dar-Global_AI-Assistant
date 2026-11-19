@@ -37,14 +37,14 @@ SOURCES = {
         "allowed_paths": ("/",),
         "allow_all_paths": True,
         "max_depth": 1,
-        "max_pages": 20,
+        "max_pages": 8,
     },
     "Wasalt": {
         "home": "https://wasalt.sa/",
         "start_urls": (
             "https://wasalt.sa/",
-            "https://wasalt.sa/فلل-للبيع-في-الرياض",
-            "https://wasalt.sa/شقق-للبيع-في-الرياض",
+            "https://wasalt.sa/%D9%81%D9%84%D9%84-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-%D9%81%D9%8A-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6",
+            "https://wasalt.sa/%D8%B4%D9%82%D9%82-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-%D9%81%D9%8A-%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6",
         ),
         "allowed_paths": ("/",),
         "allow_all_paths": True,
@@ -95,6 +95,10 @@ def extract_page(source: str, url: str) -> tuple[ScrapedPage | None, BeautifulSo
         return None, None
 
     soup = BeautifulSoup(response.content, "html.parser")
+    if source == "DarGlobal" and len(soup.get_text(" ", strip=True)) < 200:
+        rendered_html = render_javascript_page(url)
+        if rendered_html:
+            soup = BeautifulSoup(rendered_html, "html.parser")
     for unwanted in soup(["script", "style", "noscript", "svg", "footer", "nav"]):
         unwanted.decompose()
     title = soup.title.get_text(" ", strip=True) if soup.title else source
@@ -104,6 +108,24 @@ def extract_page(source: str, url: str) -> tuple[ScrapedPage | None, BeautifulSo
     heading = soup.find("h1")
     project_name = heading.get_text(" ", strip=True) if source == "DarGlobal" and heading else None
     return ScrapedPage(source=source, source_url=url, title=title, text=text, project_name=project_name), soup
+
+
+def render_javascript_page(url: str) -> str | None:
+    """Render DarGlobal only when its server HTML has no usable page content."""
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(args=["--no-sandbox"])
+            page = browser.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT * 1000)
+            page.wait_for_timeout(1500)
+            html = page.content()
+            browser.close()
+            return html
+    except Exception as error:
+        print(f"Could not render {url}: {error}")
+        return None
 
 
 def scrape_source(source: str) -> list[ScrapedPage]:
