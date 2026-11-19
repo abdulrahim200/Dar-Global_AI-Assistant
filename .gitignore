@@ -3,6 +3,7 @@
 !.env.example
 __pycache__/
 *.py[cod]
+*.tsbuildinfo
 .pytest_cache/
 venv/
 node_modules/
