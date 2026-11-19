@@ -16,7 +16,7 @@ The scraper checks `robots.txt`, requests only a small allowlisted set of public
 
 `scrapers -> JSON -> processor -> Sentence Transformers -> ChromaDB -> FastAPI -> React`
 
-The backend uses the CPU-only PyTorch wheel because embeddings do not require a GPU. This keeps the Docker image practical for a small cloud deployment.
+The backend uses a multilingual Sentence Transformers model because the Wasalt pages contain Arabic content and users may ask questions in English or Arabic. It also uses the CPU-only PyTorch wheel because embeddings do not require a GPU. This keeps the Docker image practical for a small cloud deployment.
 
 The chat endpoint only calls the LLM when relevant retrieved context exists. Responses include links to the original public pages.
 

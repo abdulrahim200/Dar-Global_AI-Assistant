@@ -7,7 +7,7 @@ from app.config import CHROMA_DIR
 from app.processor import DocumentChunk
 
 COLLECTION_NAME = "property_documents"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 
 
 @lru_cache
