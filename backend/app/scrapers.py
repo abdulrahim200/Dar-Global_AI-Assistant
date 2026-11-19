@@ -35,6 +35,7 @@ SOURCES = {
         "home": "https://darglobal.co.uk/",
         "start_urls": ("https://darglobal.co.uk/projects",),
         "allowed_paths": ("/",),
+        "allow_all_paths": True,
         "max_depth": 1,
         "max_pages": 20,
     },
@@ -46,6 +47,7 @@ SOURCES = {
             "https://wasalt.sa/شقق-للبيع-في-الرياض",
         ),
         "allowed_paths": ("/",),
+        "allow_all_paths": True,
         "max_depth": 0,
         "max_pages": 3,
     },
@@ -73,7 +75,11 @@ def is_allowed_link(url: str, source_config: dict[str, object]) -> bool:
     parsed = urlparse(url)
     home_domain = urlparse(str(source_config["home"])).netloc
     allowed_paths = tuple(str(path) for path in source_config["allowed_paths"])
-    return parsed.netloc == home_domain and (
+    if parsed.netloc != home_domain:
+        return False
+    if source_config.get("allow_all_paths"):
+        return True
+    return (
         parsed.path == "/" or any(
             path != "/" and parsed.path.startswith(path) for path in allowed_paths
         )

@@ -37,6 +37,15 @@ def index_chunks(chunks: list[DocumentChunk]) -> int:
     return len(chunks)
 
 
+def replace_chunks(chunks: list[DocumentChunk]) -> int:
+    """Replace the index during a deliberate ingestion update."""
+    collection = get_collection()
+    existing_ids = collection.get(include=[])["ids"]
+    if existing_ids:
+        collection.delete(ids=existing_ids)
+    return index_chunks(chunks)
+
+
 def search(question: str, limit: int = 5) -> list[dict]:
     collection = get_collection()
     if collection.count() == 0:
