@@ -55,6 +55,12 @@ SOURCES = {
     },
 }
 
+# Verified English aliases help multilingual retrieval match Arabic project names.
+SEARCH_ALIASES = {
+    "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D8%B3%D8%AA%D8%A9-%D8%A3%D9%85%D9%8A%D8%A7%D9%84-%D8%A3%D8%AF%D9%88%D8%A7%D8%B1-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100583": "Wasalt Six Miles project, Riyadh, apartments and duplexes for sale.",
+    "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D9%86%D8%A8%D8%AA%D9%88%D9%86-%D8%A8%D8%AA%D8%B5%D8%A7%D9%85%D9%8A%D9%85-%D9%85%D9%86-%D9%85%D8%B9%D9%88%D8%B6-%D9%81%D9%84%D9%84-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100246": "Wasalt Neptune project, Mouawad-designed villas, Riyadh.",
+}
+
 
 def robots_allow(url: str) -> bool:
     """Return False when robots.txt cannot be read or disallows our user agent."""
@@ -105,6 +111,8 @@ def extract_page(source: str, url: str) -> tuple[ScrapedPage | None, BeautifulSo
         unwanted.decompose()
     title = soup.title.get_text(" ", strip=True) if soup.title else source
     text = soup.get_text(" ", strip=True)
+    if url in SEARCH_ALIASES:
+        text = f"{SEARCH_ALIASES[url]} {text}"
     if len(text) < 80:
         return None, soup
     heading = soup.find("h1")
