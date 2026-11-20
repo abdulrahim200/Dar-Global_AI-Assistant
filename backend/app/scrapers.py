@@ -20,7 +20,7 @@ REQUEST_TIMEOUT = 20
 REQUEST_DELAY_SECONDS = 1.5
 RAW_PAGES_PATH = RAW_DATA_DIR / "properties.json"
 CRAWL_STATE_PATH = RAW_DATA_DIR / "crawl_state.json"
-CRAWL_STATE_VERSION = 2
+CRAWL_STATE_VERSION = 3
 
 
 @dataclass
@@ -42,6 +42,7 @@ SOURCES = {
         "home": "https://darglobal.co.uk/",
         "start_urls": ("https://darglobal.co.uk/projects",),
         "follow_links": True,
+        "link_path_prefixes": ("/projects",),
         "max_depth": CRAWL_MAX_DEPTH,
     },
     "Wasalt": {
@@ -50,6 +51,7 @@ SOURCES = {
         # Wasalt's public sitemaps already provide canonical content URLs.
         # Following page links adds a large number of filter and search variants.
         "follow_links": False,
+        "link_path_prefixes": (),
         "max_depth": 0,
     },
 }
@@ -118,6 +120,12 @@ def is_allowed_url(url: str, home_url: str, robots: RobotFileParser | None) -> b
         and parsed.netloc == urlparse(home_url).netloc
         and (robots is None or robots.can_fetch(HEADERS["User-Agent"], url))
     )
+
+
+def is_content_link(source: str, url: str) -> bool:
+    """Limit link discovery to real property-content routes."""
+    prefixes = SOURCES[source]["link_path_prefixes"]
+    return bool(prefixes) and urlparse(url).path.startswith(prefixes)
 
 
 def sitemap_urls(home_url: str, robots: RobotFileParser | None) -> set[str]:
@@ -215,7 +223,7 @@ def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], i
             continue
         for url in set(config["start_urls"]) | sitemap_urls(config["home"], robots):
             url = normalize_url(url)
-            if url not in queued_urls:
+            if url not in queued_urls and url not in pages:
                 pending.append((source, url, 0))
                 queued_urls.add(url)
     processed = changed = 0
@@ -240,7 +248,12 @@ def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], i
         if soup and config["follow_links"] and depth < config["max_depth"]:
             for link in soup.find_all("a", href=True):
                 candidate = normalize_url(urljoin(url, link["href"]))
-                if candidate not in seen and candidate not in queued_urls:
+                if (
+                    is_content_link(source, candidate)
+                    and candidate not in seen
+                    and candidate not in queued_urls
+                    and candidate not in pages
+                ):
                     next_pending.append((source, candidate, depth + 1))
                     queued_urls.add(candidate)
         time.sleep(REQUEST_DELAY_SECONDS)
