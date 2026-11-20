@@ -37,13 +37,31 @@ def index_chunks(chunks: list[DocumentChunk]) -> int:
     return len(chunks)
 
 
-def replace_chunks(chunks: list[DocumentChunk]) -> int:
-    """Replace the index during a deliberate ingestion update."""
+def index_new_or_changed_chunks(chunks: list[DocumentChunk]) -> tuple[int, int]:
+    """Upsert only documents whose page content or embedding model changed."""
     collection = get_collection()
-    existing_ids = collection.get(include=[])["ids"]
-    if existing_ids:
-        collection.delete(ids=existing_ids)
-    return index_chunks(chunks)
+    chunks_by_url: dict[str, list[DocumentChunk]] = {}
+    for chunk in chunks:
+        chunks_by_url.setdefault(chunk.metadata["source_url"], []).append(chunk)
+
+    to_index: list[DocumentChunk] = []
+    unchanged_pages = 0
+    for source_url, page_chunks in chunks_by_url.items():
+        existing = collection.get(where={"source_url": source_url}, include=["metadatas"])
+        existing_metadata = existing.get("metadatas", [])
+        incoming_hash = page_chunks[0].metadata["content_hash"]
+        is_unchanged = bool(existing_metadata) and all(
+            metadata.get("content_hash") == incoming_hash
+            and metadata.get("embedding_model") == EMBEDDING_MODEL
+            for metadata in existing_metadata
+        )
+        if is_unchanged:
+            unchanged_pages += 1
+            continue
+        if existing["ids"]:
+            collection.delete(ids=existing["ids"])
+        to_index.extend(page_chunks)
+    return index_chunks(to_index), unchanged_pages
 
 
 def search(question: str, limit: int = 5) -> list[dict]:

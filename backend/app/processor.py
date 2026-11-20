@@ -36,7 +36,7 @@ def split_text(text: str) -> list[str]:
     return chunks
 
 
-def create_chunks(pages: list[ScrapedPage]) -> list[DocumentChunk]:
+def create_chunks(pages: list[ScrapedPage], embedding_model: str) -> list[DocumentChunk]:
     chunks: list[DocumentChunk] = []
     seen_text: set[str] = set()
     for page in pages:
@@ -51,6 +51,8 @@ def create_chunks(pages: list[ScrapedPage]) -> list[DocumentChunk]:
                 "source_url": page.source_url,
                 "title": page.title,
                 "document_type": page.document_type,
+                "content_hash": page.content_hash,
+                "embedding_model": embedding_model,
             }
             if page.project_name:
                 metadata["project_name"] = page.project_name
