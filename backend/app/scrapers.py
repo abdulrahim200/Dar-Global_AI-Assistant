@@ -14,7 +14,7 @@ from xml.etree import ElementTree
 import requests
 from bs4 import BeautifulSoup
 
-from app.config import CRAWL_PAGE_LIMIT, RAW_DATA_DIR
+from app.config import CRAWL_PAGE_LIMIT, RAW_DATA_DIR, SITEMAP_URL_LIMIT
 
 HEADERS = {"User-Agent": "DarWasaltPropertyAssistant/1.0 (educational project)"}
 REQUEST_TIMEOUT = 20
@@ -136,7 +136,7 @@ def is_content_link(source: str, url: str) -> bool:
     return bool(prefixes) and urlparse(url).path.startswith(prefixes)
 
 
-def sitemap_urls(home_url: str, robots: RobotFileParser | None) -> set[str]:
+def sitemap_urls(home_url: str, robots: RobotFileParser | None, limit: int = SITEMAP_URL_LIMIT) -> set[str]:
     sitemap_candidates = [urljoin(home_url, "/sitemap.xml")]
     try:
         robots_text = requests.get(urljoin(home_url, "/robots.txt"), headers=HEADERS, timeout=REQUEST_TIMEOUT).text
@@ -149,7 +149,7 @@ def sitemap_urls(home_url: str, robots: RobotFileParser | None) -> set[str]:
         pass
     discovered: set[str] = set()
     checked_sitemaps: set[str] = set()
-    while sitemap_candidates and len(discovered) < 5000:
+    while sitemap_candidates and (limit == 0 or len(discovered) < limit):
         sitemap_url = normalize_url(sitemap_candidates.pop(0))
         if sitemap_url in checked_sitemaps:
             continue
