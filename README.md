@@ -12,7 +12,7 @@ A small RAG application that answers property questions using public pages colle
 
 The scraper checks `robots.txt`, reads advertised XML sitemaps, follows same-domain public links, uses a delay between requests, and skips a source when access is disallowed. DarGlobal's official property site is `darglobal.co.uk`; `darglobal.com` currently serves unrelated content. Its project catalogue is JavaScript-rendered, so the scraper uses Playwright only for DarGlobal pages when the normal server HTML is empty.
 
-Ingestion is resumable. Raw pages, hashes, HTTP cache validators, and the pending crawl queue are stored under `backend/data/raw`. Each run processes at most `CRAWL_PAGE_LIMIT` URLs (50 by default), so it can be safely repeated until the pending queue is empty. Existing pages return `304 Not Modified` where supported; ChromaDB embeds only new or changed pages and keeps vectors for unchanged pages.
+Ingestion is resumable. Raw pages, hashes, HTTP cache validators, and the pending crawl queue are stored under `backend/data/raw`. Each run processes at most `CRAWL_PAGE_LIMIT` URLs (50 by default), so it can be safely repeated until the command reports `0 URLs remain in the crawl queue`. The crawler discovers permitted same-domain pages from advertised XML sitemaps and ordinary public links, up to `CRAWL_MAX_DEPTH` (10 by default). It removes tracking URLs but keeps meaningful pagination query parameters. Existing pages return `304 Not Modified` where supported; ChromaDB embeds only new or changed pages and keeps vectors for unchanged pages.
 
 ## Architecture
 

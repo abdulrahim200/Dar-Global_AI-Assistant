@@ -6,14 +6,14 @@ import json
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree
 
 import requests
 from bs4 import BeautifulSoup
 
-from app.config import CRAWL_PAGE_LIMIT, RAW_DATA_DIR
+from app.config import CRAWL_MAX_DEPTH, CRAWL_PAGE_LIMIT, RAW_DATA_DIR
 
 HEADERS = {"User-Agent": "DarWasaltPropertyAssistant/1.0 (educational project)"}
 REQUEST_TIMEOUT = 20
@@ -37,14 +37,27 @@ class ScrapedPage:
 
 
 SOURCES = {
-    "DarGlobal": {"home": "https://darglobal.co.uk/", "start_urls": ("https://darglobal.co.uk/projects",), "max_depth": 3},
-    "Wasalt": {"home": "https://wasalt.sa/", "start_urls": ("https://wasalt.sa/",), "max_depth": 3},
+    "DarGlobal": {"home": "https://darglobal.co.uk/", "start_urls": ("https://darglobal.co.uk/projects",), "max_depth": CRAWL_MAX_DEPTH},
+    "Wasalt": {"home": "https://wasalt.sa/", "start_urls": ("https://wasalt.sa/",), "max_depth": CRAWL_MAX_DEPTH},
 }
 
 SEARCH_ALIASES = {
     "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D8%B3%D8%AA%D8%A9-%D8%A3%D9%85%D9%8A%D8%A7%D9%84-%D8%A3%D8%AF%D9%88%D8%A7%D8%B1-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100583": "Wasalt Six Miles project, Riyadh, apartments and duplexes for sale.",
     "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D9%86%D8%A8%D8%AA%D9%88%D9%86-%D8%A8%D8%AA%D8%B5%D8%A7%D9%85%D9%8A%D9%85-%D9%85%D9%86-%D9%85%D8%B9%D9%88%D8%B6-%D9%81%D9%84%D9%84-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100246": "Wasalt Neptune project, Mouawad-designed villas, Riyadh.",
 }
+
+TRACKING_PARAMETERS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
+
+
+def normalize_url(url: str) -> str:
+    """Keep meaningful query parameters but remove fragments and tracking IDs."""
+    parsed = urlparse(url)
+    query = urlencode(
+        [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+         if key.lower() not in TRACKING_PARAMETERS and not key.lower().startswith("utm_")],
+        doseq=True,
+    )
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", query, ""))
 
 
 def load_pages() -> dict[str, ScrapedPage]:
@@ -103,8 +116,12 @@ def sitemap_urls(home_url: str, robots: RobotFileParser | None) -> set[str]:
     except requests.RequestException:
         pass
     discovered: set[str] = set()
+    checked_sitemaps: set[str] = set()
     while sitemap_candidates and len(discovered) < 5000:
-        sitemap_url = sitemap_candidates.pop()
+        sitemap_url = normalize_url(sitemap_candidates.pop())
+        if sitemap_url in checked_sitemaps:
+            continue
+        checked_sitemaps.add(sitemap_url)
         try:
             root = ElementTree.fromstring(requests.get(sitemap_url, headers=HEADERS, timeout=REQUEST_TIMEOUT).content)
         except (requests.RequestException, ElementTree.ParseError):
@@ -112,7 +129,7 @@ def sitemap_urls(home_url: str, robots: RobotFileParser | None) -> set[str]:
         for element in root.iter():
             if not element.tag.endswith("loc") or not element.text:
                 continue
-            location = element.text.strip()
+            location = normalize_url(element.text.strip())
             if location.endswith(".xml"):
                 sitemap_candidates.add(location)
             elif is_allowed_url(location, home_url, robots):
@@ -169,10 +186,14 @@ def fetch_page(source: str, url: str, previous: ScrapedPage | None) -> tuple[Scr
     return ScrapedPage(source, url, title, text, hashlib.sha256(text.encode()).hexdigest(), heading.get_text(" ", strip=True) if is_project and heading else None, None, "project" if is_project else "website_page", response.headers.get("ETag"), response.headers.get("Last-Modified")), link_soup
 
 
-def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], int, int]:
+def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], int, int, int]:
     pages = load_pages()
     state = load_state()
-    pending = [(item["source"], item["url"], int(item["depth"])) for item in state.get("pending", [])]
+    pending = [
+        (item["source"], normalize_url(item["url"]), int(item["depth"]))
+        for item in state.get("pending", [])
+        if item.get("source") in SOURCES
+    ]
     queued_urls = {url for _, url, _ in pending}
     robots_by_source: dict[str, RobotFileParser | None | bool] = {}
     for source, config in SOURCES.items():
@@ -181,6 +202,7 @@ def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], i
         if robots is False:
             continue
         for url in set(config["start_urls"]) | sitemap_urls(config["home"], robots):
+            url = normalize_url(url)
             if url not in queued_urls:
                 pending.append((source, url, 0))
                 queued_urls.add(url)
@@ -205,10 +227,10 @@ def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], i
             changed += 1
         if soup and depth < config["max_depth"]:
             for link in soup.find_all("a", href=True):
-                candidate = urljoin(url, link["href"]).split("#")[0]
+                candidate = normalize_url(urljoin(url, link["href"]))
                 if candidate not in seen and candidate not in queued_urls:
                     next_pending.append((source, candidate, depth + 1))
                     queued_urls.add(candidate)
         time.sleep(REQUEST_DELAY_SECONDS)
     save_collection(pages, next_pending)
-    return list(pages.values()), processed, changed
+    return list(pages.values()), processed, changed, len(next_pending)
