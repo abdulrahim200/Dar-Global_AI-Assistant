@@ -38,8 +38,9 @@ def split_text(text: str) -> list[str]:
 
 def create_chunks(pages: list[ScrapedPage], embedding_model: str) -> list[DocumentChunk]:
     chunks: list[DocumentChunk] = []
-    seen_text: set[str] = set()
     for page in pages:
+        # Keep the same wording from different URLs: each URL is a separate source.
+        seen_text: set[str] = set()
         for index, chunk_text in enumerate(split_text(page.text)):
             normalized = clean_text(chunk_text).lower()
             if normalized in seen_text:
