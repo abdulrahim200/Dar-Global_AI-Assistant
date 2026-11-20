@@ -6,7 +6,7 @@ import json
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree
 
@@ -20,6 +20,7 @@ REQUEST_TIMEOUT = 20
 REQUEST_DELAY_SECONDS = 1.5
 RAW_PAGES_PATH = RAW_DATA_DIR / "properties.json"
 CRAWL_STATE_PATH = RAW_DATA_DIR / "crawl_state.json"
+CRAWL_STATE_VERSION = 2
 
 
 @dataclass
@@ -37,8 +38,20 @@ class ScrapedPage:
 
 
 SOURCES = {
-    "DarGlobal": {"home": "https://darglobal.co.uk/", "start_urls": ("https://darglobal.co.uk/projects",), "max_depth": CRAWL_MAX_DEPTH},
-    "Wasalt": {"home": "https://wasalt.sa/", "start_urls": ("https://wasalt.sa/",), "max_depth": CRAWL_MAX_DEPTH},
+    "DarGlobal": {
+        "home": "https://darglobal.co.uk/",
+        "start_urls": ("https://darglobal.co.uk/projects",),
+        "follow_links": True,
+        "max_depth": CRAWL_MAX_DEPTH,
+    },
+    "Wasalt": {
+        "home": "https://wasalt.sa/",
+        "start_urls": ("https://wasalt.sa/",),
+        # Wasalt's public sitemaps already provide canonical content URLs.
+        # Following page links adds a large number of filter and search variants.
+        "follow_links": False,
+        "max_depth": 0,
+    },
 }
 
 SEARCH_ALIASES = {
@@ -46,18 +59,10 @@ SEARCH_ALIASES = {
     "https://wasalt.sa/project/%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6/%D9%85%D8%B4%D8%B1%D9%88%D8%B9-%D9%86%D8%A8%D8%AA%D9%88%D9%86-%D8%A8%D8%AA%D8%B5%D8%A7%D9%85%D9%8A%D9%85-%D9%85%D9%86-%D9%85%D8%B9%D9%88%D8%B6-%D9%81%D9%84%D9%84-%D9%84%D9%84%D8%A8%D9%8A%D8%B9-100246": "Wasalt Neptune project, Mouawad-designed villas, Riyadh.",
 }
 
-TRACKING_PARAMETERS = {"fbclid", "gclid", "mc_cid", "mc_eid"}
-
-
 def normalize_url(url: str) -> str:
-    """Keep meaningful query parameters but remove fragments and tracking IDs."""
+    """Use a canonical content URL; query links are search/filter variants."""
     parsed = urlparse(url)
-    query = urlencode(
-        [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-         if key.lower() not in TRACKING_PARAMETERS and not key.lower().startswith("utm_")],
-        doseq=True,
-    )
-    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", query, ""))
+    return urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
 
 
 def load_pages() -> dict[str, ScrapedPage]:
@@ -74,14 +79,21 @@ def load_pages() -> dict[str, ScrapedPage]:
 
 def load_state() -> dict:
     if not CRAWL_STATE_PATH.exists():
-        return {"pending": []}
-    return json.loads(CRAWL_STATE_PATH.read_text(encoding="utf-8"))
+        return {"version": CRAWL_STATE_VERSION, "pending": []}
+    state = json.loads(CRAWL_STATE_PATH.read_text(encoding="utf-8"))
+    if state.get("version") != CRAWL_STATE_VERSION:
+        print("Discarding a crawl queue created by an older crawler strategy.")
+        return {"version": CRAWL_STATE_VERSION, "pending": []}
+    return state
 
 
 def save_collection(pages: dict[str, ScrapedPage], pending: list[tuple[str, str, int]]) -> None:
     RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
     RAW_PAGES_PATH.write_text(json.dumps([asdict(page) for page in pages.values()], ensure_ascii=False, indent=2), encoding="utf-8")
-    state = {"pending": [{"source": source, "url": url, "depth": depth} for source, url, depth in pending]}
+    state = {
+        "version": CRAWL_STATE_VERSION,
+        "pending": [{"source": source, "url": url, "depth": depth} for source, url, depth in pending],
+    }
     CRAWL_STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -225,7 +237,7 @@ def scrape_all(page_limit: int = CRAWL_PAGE_LIMIT) -> tuple[list[ScrapedPage], i
         if page and (not previous or page.content_hash != previous.content_hash):
             pages[url] = page
             changed += 1
-        if soup and depth < config["max_depth"]:
+        if soup and config["follow_links"] and depth < config["max_depth"]:
             for link in soup.find_all("a", href=True):
                 candidate = normalize_url(urljoin(url, link["href"]))
                 if candidate not in seen and candidate not in queued_urls:
