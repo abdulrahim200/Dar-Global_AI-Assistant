@@ -21,7 +21,7 @@ REQUEST_TIMEOUT = 20
 REQUEST_DELAY_SECONDS = 1.5
 RAW_PAGES_PATH = RAW_DATA_DIR / "properties.json"
 CRAWL_STATE_PATH = RAW_DATA_DIR / "crawl_state.json"
-CRAWL_STATE_VERSION = 4
+CRAWL_STATE_VERSION = 5
 
 
 @dataclass
@@ -162,6 +162,8 @@ def sitemap_urls(home_url: str, robots: RobotFileParser | None, limit: int = SIT
         except (requests.RequestException, ElementTree.ParseError):
             continue
         for element in root.iter():
+            if limit and len(discovered) >= limit:
+                break
             if not element.tag.endswith("loc") or not element.text:
                 continue
             location = normalize_url(element.text.strip())
